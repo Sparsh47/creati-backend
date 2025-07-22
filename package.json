@@ -1,0 +1,31 @@
+{
+  "name": "creati-backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "dev": "ts-node ./src/server.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sparsh47/creati-backend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Sparsh47/creati-backend/issues"
+  },
+  "homepage": "https://github.com/Sparsh47/creati-backend#readme",
+  "description": "",
+  "dependencies": {
+    "dotenv": "^17.2.0",
+    "express": "^5.1.0",
+    "express-session": "^1.18.2",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "ts-node": "^10.9.2"
+  }
+}
