@@ -5,6 +5,7 @@ export const authRouter = Router();
 const authController = AuthController.getInstance();
 
 authRouter.post("/login", authController.login);
+authRouter.post("/oauth/google", authController.oauth);
 authRouter.post("/register", authController.register);
 authRouter.post("/refresh", authController.refresh);
 authRouter.post("/logout", authController.logout);

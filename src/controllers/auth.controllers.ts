@@ -36,7 +36,7 @@ export default class AuthController {
                         message: "Account does not exist"
                     })
                 } else {
-                    const isPasswordCorrect = await compare(password, user.passwordHash);
+                    const isPasswordCorrect = await compare(password, user.passwordHash!);
                     if(!isPasswordCorrect) {
                         res.status(401).json({
                             status: false,
@@ -131,6 +131,34 @@ export default class AuthController {
         } catch (err) {
             console.error("Unexpected error in refresh:", err);
             return res.status(500).json({ error: "Internal server error" });
+        }
+    }
+
+    async oauth(req: Request, res: Response){
+        try {
+            const {name, email} = req.body;
+
+            if (!email || !name) {
+                return res.status(400).json({ message: "Missing email or name" });
+            }
+
+            const user = await prismaClient.user.upsert({
+                where: { email },
+                update: { name },
+                create: {
+                    email,
+                    name,
+                    passwordHash: null,
+                },
+            });
+
+            res.status(200).json({
+                status: true,
+                message: "Successfully logged in via google",
+            });
+
+        } catch (e: any) {
+            ApplicationError(e);
         }
     }
 
