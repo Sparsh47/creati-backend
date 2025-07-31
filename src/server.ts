@@ -3,6 +3,8 @@ import dotenv from "dotenv";
 import {authRouter} from "./routes/auth.routes";
 import {globalErrorHandler} from "./lib/utils";
 import cors from "cors";
+import {authMiddleware} from "./middlewares/auth.middlewares";
+import {designsRouter} from "./routes/designs.routes";
 
 dotenv.config();
 
@@ -14,7 +16,7 @@ app.use(cors({
     origin: "http://localhost:3000"
 }));
 
-app.get("/", (req, res) => {
+app.get("/", authMiddleware, (req, res) => {
     res.status(200).json({
         status: "success",
         message: "Welcome to the server!",
@@ -22,6 +24,7 @@ app.get("/", (req, res) => {
 });
 
 app.use("/api/v1/auth", authRouter);
+app.use("/api/v1/designs", authMiddleware, designsRouter);
 
 // global error handler
 app.use(globalErrorHandler);

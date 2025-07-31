@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import jwt from "jsonwebtoken";
 
 interface AppError extends Error {
     status?: number;
@@ -22,4 +23,10 @@ export const globalErrorHandler = (
 
 export function ApplicationError(e: any) {
     throw new Error(`Application Error: ${e.message}`)
+}
+
+export function generateAccessToken(userId: string) {
+    return jwt.sign({userId: userId}, process.env.JWT_SECRET!, {
+        expiresIn: 15*60*1000,
+    })
 }

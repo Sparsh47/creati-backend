@@ -8,10 +8,25 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Type {
+  PUBLIC
+  PRIVATE
+}
+
 model User {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   name         String
-  email        String   @unique
+  email        String    @unique
   passwordHash String?
-  createdAt    DateTime @default(now())
+  designs      Designs[]
+  createdAt    DateTime  @default(now())
+}
+
+model Designs {
+  id         String   @id @default(uuid())
+  prompt     String
+  images     String[] @default([])
+  visibility Type     @default(PUBLIC)
+  users      User[]
+  createdAt  DateTime @default(now())
 }

@@ -1,10 +1,11 @@
 import {Request, Response} from "express";
 import {hash, compare} from "bcrypt";
 import {loginSchema, registerSchema} from "../validations/auth.validations";
-import {ApplicationError} from "../lib/utils";
+import {ApplicationError, generateAccessToken} from "../lib/utils";
 import jwt from "jsonwebtoken";
 import {issueRefreshToken, revokeRefreshToken, verifyRefreshToken} from "../services/redis.service";
 import {prismaClient} from "../services/prisma.service";
+import {verifyGoogleToken} from "../services/google.service";
 
 export default class AuthController {
 
@@ -43,7 +44,7 @@ export default class AuthController {
                             message: "Invalid password"
                         })
                     } else {
-                        const accessToken = jwt.sign({userId: user.id}, process.env.JWT_SECRET!, {expiresIn: 15*60*1000});
+                        const accessToken = generateAccessToken(user.id);
 
                         const token = await issueRefreshToken(user.id);
                         res.status(200).json({
@@ -85,7 +86,7 @@ export default class AuthController {
                     }
                 });
 
-                const accessToken = jwt.sign({userId: user.id}, process.env.JWT_SECRET!, {expiresIn: 15*60*1000});
+                const accessToken = generateAccessToken(user.id);
 
                 const token = await issueRefreshToken(user.id);
 
@@ -120,9 +121,7 @@ export default class AuthController {
             }
             const { userId, newToken } = result;
 
-            const accessToken = jwt.sign({ userId: userId }, process.env.JWT_SECRET!, {
-                expiresIn: 15*60*1000,
-            });
+            const accessToken = generateAccessToken(userId);
 
             return res.status(200).json({
                 accessToken,
@@ -136,10 +135,16 @@ export default class AuthController {
 
     async oauth(req: Request, res: Response){
         try {
-            const {name, email} = req.body;
+            const {name, email, googleAccessToken, googleRefreshToken} = req.body;
 
-            if (!email || !name) {
-                return res.status(400).json({ message: "Missing email or name" });
+            if (!email || !name || !googleAccessToken) {
+                return res.status(400).json({ message: "Missing required fields" });
+            }
+
+            const googleTokenInfo = await verifyGoogleToken(googleAccessToken);
+
+            if (googleTokenInfo.email !== email) {
+                return res.status(400).json({ message: "Token email mismatch" });
             }
 
             const user = await prismaClient.user.upsert({
@@ -152,12 +157,19 @@ export default class AuthController {
                 },
             });
 
+            const accessToken = generateAccessToken(user.id);
+            const refreshToken = await issueRefreshToken(user.id);
+
             res.status(200).json({
                 status: true,
                 message: "Successfully logged in via google",
+                user: {id: user.id, name: user.name, email: user.email},
+                accessToken,
+                refreshToken,
             });
 
         } catch (e: any) {
+            console.error('OAuth verification failed:', e);
             ApplicationError(e);
         }
     }
