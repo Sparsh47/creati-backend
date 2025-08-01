@@ -25,8 +25,22 @@ model User {
 model Designs {
   id         String   @id @default(uuid())
   prompt     String
-  images     String[] @default([])
+  images     Images[]
   visibility Type     @default(PUBLIC)
   users      User[]
   createdAt  DateTime @default(now())
+}
+
+model Images {
+  id           String   @id @default(uuid())
+  publicId     String   @unique
+  url          String
+  secureUrl    String
+  originalName String
+  format       String
+  width        Int
+  height       Int
+  size         Int
+  Designs      Designs? @relation(fields: [designsId], references: [id], onDelete: Cascade)
+  designsId    String?
 }

@@ -2,6 +2,18 @@ import {Request, Response} from 'express';
 import {ApplicationError} from "../lib/utils";
 import {prismaClient} from "../services/prisma.service";
 import neo4jDriver from "../services/neo4j.service";
+import cloudinary from "../services/cloudinary.service";
+import {UploadApiResponse, UploadApiErrorResponse} from "cloudinary";
+
+interface CloudinaryResult {
+    public_id: string;
+    url: string;
+    secure_url: string;
+    format: string;
+    width: number;
+    height: number;
+    bytes: number;
+}
 
 export default class DesignsController {
     private static _instance: DesignsController;
@@ -18,7 +30,15 @@ export default class DesignsController {
 
     async getAllDesigns(req: Request, res: Response) {
         try {
-            const designs = await prismaClient.designs.findMany({where: {visibility: "PUBLIC"}});
+            const designs = await prismaClient.designs.findMany({
+                where: {
+                    visibility: "PUBLIC"
+                },
+                include: {
+                    images: true,
+                    users: true
+                }
+            });
 
             res.status(200).json({
                 status: true, data: designs
@@ -302,6 +322,94 @@ export default class DesignsController {
         }
     }
 
+    async uploadImage(req: Request, res: Response) {
+        try {
+
+            const {designId, userId} = req.params;
+
+            const user = await prismaClient.user.findUnique({where: {id: userId}});
+
+            if (!user) {
+                res.status(401).json({
+                    success: false,
+                    message: 'User not found',
+                });
+                return;
+            }
+
+            const design = await prismaClient.designs.findFirst({where: {id: designId, users: { some: {id: userId}}}});
+
+            if (!design) {
+                res.status(404).json({
+                    success: false,
+                    message: 'Design not found',
+                });
+                return;
+            }
+
+            if(!req.file) {
+                res.status(400).json({
+                    status: false,
+                    message: 'No files uploaded',
+                });
+                return;
+            }
+
+            const result: UploadApiResponse = await new Promise((resolve, reject) => {
+                cloudinary.uploader.upload_stream({
+                    resource_type: 'image',
+                    folder: `designs/${designId}`,
+                    public_id: `${Date.now()}-${req.file?.originalname.split('.')[0]}`,
+                    transformation: [
+                        {
+                            width: 2000,
+                            height: 2000,
+                            crop: 'limit'
+                        },
+                        {
+                            quality: 'auto'
+                        },
+                        {
+                            format: 'auto'
+                        }
+                    ]
+                },
+                    (error: UploadApiErrorResponse | undefined, result: UploadApiResponse | undefined) => {
+                        if (error) {
+                            reject(error);
+                        } else if (result) {
+                            resolve(result);
+                        } else {
+                            reject(new Error('Upload failed: No result returned'));
+                        }
+                    }).end(req.file?.buffer);
+            });
+
+            const savedImage = await prismaClient.images.create({
+                data: {
+                    publicId: result.public_id,
+                    url: result.url,
+                    secureUrl: result.secure_url,
+                    originalName: req.file?.originalname!,
+                    format: result.format,
+                    width: result.width,
+                    height: result.height,
+                    size: result.bytes,
+                    designsId: designId
+                }
+            });
+
+            res.json({
+                status: true,
+                message: 'Image added to design successfully',
+                data: savedImage
+            });
+
+        } catch (e) {
+            ApplicationError(e);
+        }
+    }
+
     async getDesignByUser(req: Request, res: Response) {
         try {
             const {userId} = req.params;
@@ -316,13 +424,19 @@ export default class DesignsController {
                 return;
             }
 
-            const userDesigns = await prismaClient.designs.findMany({where: {
-                users:{
-                    some: {
-                        id: userId
+            const userDesigns = await prismaClient.designs.findMany({
+                where: {
+                    users: {
+                        some: {
+                            id: userId
+                        }
                     }
+                },
+                include: {
+                    images: true,
+                    users: true
                 }
-            }});
+            });
 
             res.status(200).json({
                 status: true,
