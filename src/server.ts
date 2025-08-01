@@ -5,6 +5,7 @@ import {globalErrorHandler} from "./lib/utils";
 import cors from "cors";
 import {authMiddleware} from "./middlewares/auth.middlewares";
 import {designsRouter} from "./routes/designs.routes";
+import {profileRouter} from "./routes/profile.routes";
 
 dotenv.config();
 
@@ -25,6 +26,7 @@ app.get("/", authMiddleware, (req, res) => {
 
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/designs", authMiddleware, designsRouter);
+app.use("/api/v1/profile", authMiddleware, profileRouter);
 
 // global error handler
 app.use(globalErrorHandler);

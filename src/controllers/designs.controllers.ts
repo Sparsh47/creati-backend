@@ -206,8 +206,8 @@ export default class DesignsController {
                 await session.executeWrite(async (transaction) => {
                     if (nodes.length > 0) {
                         const nodesWithMeta = nodes.map((node: any) => ({
-                            id: `${design.id}-${node.id}`,       // Unique Neo4j ID
-                            originalId: node.id,                  // Original React Flow ID
+                            id: `${design.id}-${node.id}`,
+                            originalId: node.id,
                             type: node.type,
                             position: JSON.stringify(node.position || {}),
                             data: JSON.stringify(node.data || {}),
@@ -234,12 +234,12 @@ export default class DesignsController {
 
                     if (edges.length > 0) {
                         const edgesWithMeta = edges.map((edge: any) => ({
-                            id: `${design.id}-${edge.id}`,           // Unique Neo4j ID
-                            originalId: edge.id,                      // Original React Flow ID
-                            source: `${design.id}-${edge.source}`,   // Reference to Neo4j node ID
-                            target: `${design.id}-${edge.target}`,   // Reference to Neo4j node ID
-                            originalSource: edge.source,             // Original React Flow source
-                            originalTarget: edge.target,             // Original React Flow target
+                            id: `${design.id}-${edge.id}`,
+                            originalId: edge.id,
+                            source: `${design.id}-${edge.source}`,
+                            target: `${design.id}-${edge.target}`,
+                            originalSource: edge.source,
+                            originalTarget: edge.target,
                             label: edge.label || '',
                             type: edge.type || '',
                             sourceHandle: edge.sourceHandle || '',
@@ -296,6 +296,63 @@ export default class DesignsController {
             } finally {
                 await session.close();
             }
+
+        } catch (e) {
+            ApplicationError(e);
+        }
+    }
+
+    async getDesignByUser(req: Request, res: Response) {
+        try {
+            const {userId} = req.params;
+
+            const user = await prismaClient.user.findUnique({where: {id: userId}});
+
+            if(!user) {
+                res.status(404).json({
+                    status: false,
+                    message: 'User not found'
+                })
+                return;
+            }
+
+            const userDesigns = await prismaClient.designs.findMany({where: {
+                users:{
+                    some: {
+                        id: userId
+                    }
+                }
+            }});
+
+            res.status(200).json({
+                status: true,
+                data: userDesigns,
+            })
+
+        } catch (e) {
+            ApplicationError(e);
+        }
+    }
+
+    async deleteDesignById(req: Request, res: Response) {
+        try {
+            const {designId} = req.params;
+
+            const design = await prismaClient.designs.findFirst({where: {id: designId}});
+
+            if(!design) {
+                res.status(404).json({
+                    status: false,
+                    message: "Design not found"
+                })
+            }
+
+            await prismaClient.designs.delete({where: {id: designId}});
+
+            res.status(200).json({
+                status: true,
+                message: 'Design deleted successfully'
+            })
 
         } catch (e) {
             ApplicationError(e);
