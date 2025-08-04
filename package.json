@@ -29,6 +29,7 @@
     "multer": "^2.0.2",
     "neo4j-driver": "^5.28.1",
     "redis": "^5.6.1",
+    "stripe": "^18.4.0",
     "zod": "^4.0.10"
   },
   "devDependencies": {
