@@ -28,7 +28,7 @@ app.get("/", authMiddleware, (req, res) => {
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/designs", authMiddleware, designsRouter);
 app.use("/api/v1/profile", authMiddleware, profileRouter);
-app.use("/api/v1/payment", authMiddleware, paymentRouter)
+app.use("/api/v1/payment", authMiddleware, paymentRouter);
 
 // global error handler
 app.use(globalErrorHandler);

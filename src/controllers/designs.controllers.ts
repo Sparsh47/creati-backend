@@ -123,9 +123,9 @@ export default class DesignsController {
                     const edge = record.get('e').properties;
 
                     const reactFlowEdge: any = {
-                        id: edge.originalId,           // Original React Flow ID
-                        source: edge.originalSource,   // Original source (matches node ID)
-                        target: edge.originalTarget,   // Original target (matches node ID)
+                        id: edge.originalId,
+                        source: edge.originalSource,
+                        target: edge.originalTarget,
                     };
 
                     if (edge.type) {
@@ -201,12 +201,22 @@ export default class DesignsController {
                 return;
             }
 
-            const user = await prismaClient.user.findFirst({where: {email}});
+            const user = await prismaClient.user.findFirst({where: {email}, include: {designs: true}});
 
             if (!user) {
                 res.status(404).json({
                     status: false,
                     message: "User not found."
+                });
+                return;
+            }
+
+            const totalDesigns = user.designs.length;
+
+            if(totalDesigns === user.maxDesigns) {
+                res.status(429).json({
+                    status: false,
+                    error: "Upgrade your subscription to create more designs."
                 });
                 return;
             }

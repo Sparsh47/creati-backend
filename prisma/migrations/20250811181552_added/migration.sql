@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Subscriptions" ALTER COLUMN "createdAt" SET DEFAULT CURRENT_TIMESTAMP;

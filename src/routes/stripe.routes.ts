@@ -9,3 +9,6 @@ paymentRouter.post("/create-checkout-session", stripeController.createCheckoutSe
 paymentRouter.get("/retrieve-session", stripeController.retrieveSession);
 paymentRouter.get("/success", stripeController.success);
 paymentRouter.get("/cancel", stripeController.cancel);
+paymentRouter.post("/change", stripeController.changePlan);
+paymentRouter.post('/change', stripeController.changePlan);
+paymentRouter.post('/create-plan-checkout', stripeController.createPlanChangeCheckout);

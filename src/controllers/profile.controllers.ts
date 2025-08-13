@@ -1,6 +1,7 @@
 import {Request, Response} from "express";
 import {ApplicationError} from "../lib/utils";
 import {prismaClient} from "../services/prisma.service";
+import {PLANS} from "../lib/constants";
 
 export default class ProfileController {
     private static _instance: ProfileController;
@@ -14,6 +15,18 @@ export default class ProfileController {
         }
         return this._instance;
     }
+
+    private getUserActiveSubscription = async (userId: string) => {
+        return prismaClient.subscriptions.findFirst({
+            where: {
+                userId: userId,
+                status: "ACTIVE"
+            },
+            orderBy: {
+                createdAt: "desc"
+            }
+        });
+    };
 
     async updateProfile(req: Request, res: Response) {
         try {
@@ -53,11 +66,44 @@ export default class ProfileController {
         }
     }
 
-    async getProfile(req: Request, res: Response) {
+    getUserPlan = async (req: Request, res: Response) => {
+        try {
+            const userId = req.user?.userId;
+
+            if(!userId) {
+                res.status(404).json({
+                    status: false,
+                    message: "User not found."
+                });
+                return;
+            }
+
+            const currentPlan = await this.getUserActiveSubscription(userId);
+
+            res.status(200).json({
+                status: true,
+                data: {
+                    plan: currentPlan
+                }
+            })
+
+        } catch (e) {
+            ApplicationError(e)
+        }
+    }
+
+    getProfile = async (req: Request, res: Response) => {
         try {
             const {userId} = req.params;
 
-            const user = await prismaClient.user.findUnique({where: {id: userId}});
+            const user = await prismaClient.user.findUnique({
+                where: {
+                    id: userId
+                },
+                include: {
+                    designs: true
+                }
+            });
 
             if(!user) {
                 res.status(404).json({
@@ -67,11 +113,16 @@ export default class ProfileController {
                 return;
             }
 
+            const currentPlan = await this.getUserActiveSubscription(userId);
+
             res.status(200).json({
                 status: true,
                 data: {
                     name: user.name,
-                    email: user.email
+                    email: user.email,
+                    designs: user.designs,
+                    maxDesigns: user.maxDesigns,
+                    plan: currentPlan
                 }
             })
         } catch (e) {

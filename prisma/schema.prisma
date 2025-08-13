@@ -13,13 +13,29 @@ enum Type {
   PRIVATE
 }
 
+enum PaymentStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  INCOMPLETE
+}
+
+enum PlanType {
+  FREE
+  PLUS
+  PRO_PLUS
+}
+
 model User {
-  id           String    @id @default(uuid())
-  name         String
-  email        String    @unique
-  passwordHash String?
-  designs      Designs[]
-  createdAt    DateTime  @default(now())
+  id               String          @id @default(uuid())
+  stripeCustomerId String?
+  name             String
+  email            String          @unique
+  passwordHash     String?
+  designs          Designs[]
+  maxDesigns       Int
+  subscriptions    Subscriptions[]
+  createdAt        DateTime        @default(now())
 }
 
 model Designs {
@@ -43,4 +59,20 @@ model Images {
   size         Int
   Designs      Designs? @relation(fields: [designsId], references: [id], onDelete: Cascade)
   designsId    String?
+}
+
+model Subscriptions {
+  id                   String        @id @default(uuid())
+  user                 User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId               String
+  stripeSubscriptionId String?       @unique
+  stripePriceId        String?
+  planType             PlanType
+  status               PaymentStatus
+  currentPeriodEnd     DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@unique([userId, planType, status], name: "unique_active_subscription")
+  @@index([userId, status])
 }
