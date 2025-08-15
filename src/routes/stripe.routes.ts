@@ -9,6 +9,7 @@ paymentRouter.post("/create-checkout-session", stripeController.createCheckoutSe
 paymentRouter.get("/retrieve-session", stripeController.retrieveSession);
 paymentRouter.get("/success", stripeController.success);
 paymentRouter.get("/cancel", stripeController.cancel);
+paymentRouter.post("/cancel-plan", stripeController.cancelPlan);
 paymentRouter.post("/change", stripeController.changePlan);
-paymentRouter.post('/change', stripeController.changePlan);
-paymentRouter.post('/create-plan-checkout', stripeController.createPlanChangeCheckout);
+paymentRouter.get('/current-plan', stripeController.getCurrentUserPlan);
+paymentRouter.post('/complete-checkout', stripeController.completeCheckout);

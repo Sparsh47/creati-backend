@@ -1,4 +1,4 @@
-import {PlanConfig, PRICE_ID_TO_PLAN} from "../constants/pricingPlans.constant";
+import {PLAN_CONFIGS, PlanConfig, PRICE_ID_TO_PLAN} from "../constants/pricingPlans.constant";
 
 interface ValidatedPlan {
     planConfig: PlanConfig;
@@ -20,6 +20,16 @@ export class PlanValidator {
             billingCycle
         };
     }
+
+    // static getPlanConfig(planName: string): ValidatedPlan | null {
+    //     const planConfig = PLAN_CONFIGS.find((plan)=>plan.dbPlanType === planName);
+    //
+    //     if(!planConfig) {
+    //         return null;
+    //     }
+    //
+    //     const billingCycle = planConfig
+    // }
 
     static getValidPriceIds(): string[] {
         return Array.from(PRICE_ID_TO_PLAN.keys()).filter(priceId => {

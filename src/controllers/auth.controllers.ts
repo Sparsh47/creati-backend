@@ -9,6 +9,7 @@ import {
 } from "../services/redis.service";
 import { prismaClient } from "../services/prisma.service";
 import { verifyGoogleToken } from "../services/google.service";
+import {PaymentStatus, PlanType} from "../generated/prisma";
 
 export default class AuthController {
     private static _instance: AuthController;
@@ -27,8 +28,8 @@ export default class AuthController {
             const existingFreeSubscription = await prismaClient.subscriptions.findFirst({
                 where: {
                     userId: userId,
-                    planType: "FREE",
-                    status: "ACTIVE"
+                    planType: PlanType.FREE,
+                    status: PaymentStatus.ACTIVE
                 }
             });
 
@@ -42,8 +43,8 @@ export default class AuthController {
                     userId: userId,
                     stripeSubscriptionId: null,
                     stripePriceId: null,
-                    status: "ACTIVE",
-                    planType: "FREE",
+                    status: PaymentStatus.ACTIVE,
+                    planType: PlanType.FREE,
                     currentPeriodEnd: null
                 },
             });

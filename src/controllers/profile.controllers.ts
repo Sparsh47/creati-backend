@@ -94,7 +94,9 @@ export default class ProfileController {
 
     getProfile = async (req: Request, res: Response) => {
         try {
-            const {userId} = req.params;
+            const userId = req.user?.userId;
+
+            console.log(userId);
 
             const user = await prismaClient.user.findUnique({
                 where: {
@@ -113,7 +115,11 @@ export default class ProfileController {
                 return;
             }
 
-            const currentPlan = await this.getUserActiveSubscription(userId);
+            console.log(user);
+
+            const currentPlan = await this.getUserActiveSubscription(userId!);
+
+            console.log(currentPlan);
 
             res.status(200).json({
                 status: true,
