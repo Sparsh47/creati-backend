@@ -21,7 +21,7 @@ app.use(cors({
     origin: ["http://localhost:3000", process.env.FRONTEND_BASE_URL!]
 }));
 
-app.get("/", authMiddleware, (req, res) => {
+app.get("/", (req, res) => {
     res.status(200).json({
         status: "success",
         message: "Welcome to the server!",
