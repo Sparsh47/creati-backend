@@ -30,7 +30,7 @@ export default class ProfileController {
 
     async updateProfile(req: Request, res: Response) {
         try {
-            const {userId} = req.params;
+            const userId = req.user?.userId;
             const {name} = req.body;
 
             const user = await prismaClient.user.findUnique({where: {id: userId}});
@@ -43,8 +43,6 @@ export default class ProfileController {
                 return;
             }
 
-            console.log("HERE AGAIN")
-
             await prismaClient.user.update({
                 where: {
                     id: userId
@@ -53,8 +51,6 @@ export default class ProfileController {
                     name: name
                 }
             });
-
-            console.log("HERE")
 
             res.status(200).json({
                 status: true,
