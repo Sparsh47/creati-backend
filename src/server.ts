@@ -18,7 +18,7 @@ app.use("/api/v1/webhooks", webhookRouter);
 app.use(express.json());
 
 app.use(cors({
-    origin: "http://localhost:3000"
+    origin: ["http://localhost:3000", process.env.FRONTEND_BASE_URL!]
 }));
 
 app.get("/", authMiddleware, (req, res) => {
