@@ -37,5 +37,5 @@ app.use("/api/v1/payment", authMiddleware, paymentRouter);
 app.use(globalErrorHandler);
 
 app.listen(PORT, () => {
-    console.log("Server is running on port 8000");
+    console.log(`Server is running on port ${PORT}`);
 });
