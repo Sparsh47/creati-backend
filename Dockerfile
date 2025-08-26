@@ -8,14 +8,14 @@ RUN npm install
 COPY . .
 
 RUN npm run prisma:generate
-
 RUN npm run build
 
-
+# ---------------- Runner ----------------
 FROM node:20-slim AS runner
 
 WORKDIR /app
 
+# Install openssl for Prisma
 RUN apt-get update -y && apt-get install -y openssl
 
 COPY --from=builder /app/package*.json ./
@@ -27,6 +27,5 @@ COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 8000
 
-RUN npx prisma migrate deploy
-
-CMD ["npm", "run", "start"]
+# Entrypoint to run migrations and then start server
+CMD npx prisma migrate deploy && npm run start
