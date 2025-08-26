@@ -36,6 +36,8 @@ app.use("/api/v1/payment", authMiddleware, paymentRouter);
 // global error handler
 app.use(globalErrorHandler);
 
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+if (typeof PORT === "number") {
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Server is running on port ${PORT}`);
+    });
+}
