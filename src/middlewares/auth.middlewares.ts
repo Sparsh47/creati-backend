@@ -1,5 +1,6 @@
 import {NextFunction, Request, Response} from "express";
 import jwt from "jsonwebtoken";
+import Stripe from "stripe";
 
 interface JwtPayload {
     userId: string;
@@ -13,6 +14,7 @@ declare global {
             user?: {
                 userId: string;
             }
+            stripeEvent: Stripe.Event;
         }
     }
 }

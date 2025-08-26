@@ -12,4 +12,5 @@ paymentRouter.get("/cancel", stripeController.cancel);
 paymentRouter.post("/cancel-plan", stripeController.cancelPlan);
 paymentRouter.post("/change", stripeController.changePlan);
 paymentRouter.get('/current-plan', stripeController.getCurrentUserPlan);
+paymentRouter.post("/reactivate-plan", stripeController.reactivatePlan);
 paymentRouter.post('/complete-checkout', stripeController.completeCheckout);

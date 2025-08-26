@@ -7,10 +7,13 @@ import {authMiddleware} from "./middlewares/auth.middlewares";
 import {designsRouter} from "./routes/designs.routes";
 import {profileRouter} from "./routes/profile.routes";
 import {paymentRouter} from "./routes/stripe.routes";
+import {webhookRouter} from "./webhooks";
 
 dotenv.config();
 
 const app = express();
+
+app.use("/api/v1/webhooks", webhookRouter);
 
 app.use(express.json());
 

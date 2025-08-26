@@ -15,9 +15,17 @@ enum Type {
 
 enum PaymentStatus {
   ACTIVE
-  CANCELED
+  CANCELLED
   PAST_DUE
   INCOMPLETE
+  EXPIRED
+}
+
+enum WebhookStatus {
+  PENDING
+  PROCESSED
+  FAILED
+  SKIPPED
 }
 
 enum PlanType {
@@ -40,9 +48,10 @@ model User {
 
 model Designs {
   id         String   @id @default(uuid())
+  title      String
   prompt     String
   images     Images[]
-  visibility Type     @default(PUBLIC)
+  visibility Type     @default(PRIVATE)
   users      User[]
   createdAt  DateTime @default(now())
 }
@@ -69,10 +78,32 @@ model Subscriptions {
   stripePriceId        String?
   planType             PlanType
   status               PaymentStatus
+  cancelAtPeriodEnd    Boolean?      @default(false)
+  endedAt              DateTime?
+  expiresAt            DateTime?
+  lastPaymentAt        DateTime?
+  currentPeriodStart   DateTime?
   currentPeriodEnd     DateTime?
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 
-  @@unique([userId, planType, status], name: "unique_active_subscription")
-  @@index([userId, status])
+  @@unique([userId, stripeSubscriptionId])
+  @@index([userId])
+  @@index([status])
+  @@index([stripeSubscriptionId])
+}
+
+model WebhookEvents {
+  id           String        @id @default(uuid())
+  eventId      String        @unique
+  eventType    String
+  payload      Json
+  status       WebhookStatus @default(PENDING)
+  retryCount   Int           @default(0)
+  receivedAt   DateTime      @default(now())
+  processedAt  DateTime?
+  errorMessage String?
+
+  @@index([eventType])
+  @@index([status])
 }

@@ -18,34 +18,142 @@ export default class StripeController {
         return StripeController._instance;
     }
 
-    private async updateDatabaseAfterCheckout(
+    private async getBillingPeriodDates(stripeSubscriptionId: string, stripePriceId: string) {
+        try {
+            const planDetails = PlanValidator.validatePriceId(stripePriceId);
+            console.log('🔍 PlanValidator result:', planDetails);
+
+            if (!planDetails) {
+                throw new Error('Invalid price ID');
+            }
+
+            const billingCycle = planDetails.billingCycle;
+            console.log('🔍 Billing cycle from PlanValidator:', billingCycle);
+
+            const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId, {
+                expand: ['latest_invoice']
+            });
+
+            let periodStart: Date;
+            let periodEnd: Date;
+
+            // @ts-ignore
+            if (subscription.latest_invoice && subscription.latest_invoice.period_start && subscription.latest_invoice.period_end) {
+
+                // @ts-ignore
+                const invoiceStart = new Date(subscription.latest_invoice.period_start * 1000);
+                // @ts-ignore
+                const invoiceEnd = new Date(subscription.latest_invoice.period_end * 1000);
+
+                if (invoiceStart.getTime() !== invoiceEnd.getTime()) {
+                    periodStart = invoiceStart;
+                    periodEnd = invoiceEnd;
+                } else {
+
+                    periodStart = subscription.start_date
+                        ? new Date(subscription.start_date * 1000)
+                        : new Date();
+
+                    periodEnd = new Date(periodStart.getTime());
+
+                    if (billingCycle === 'monthly') {
+                        periodEnd.setMonth(periodEnd.getMonth() + 1);
+                    } else if (billingCycle === 'yearly') {
+                        periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+                    } else {
+                        periodEnd.setMonth(periodEnd.getMonth() + 1);
+                    }
+                }
+
+            } else {
+
+                periodStart = subscription.start_date
+                    ? new Date(subscription.start_date * 1000)
+                    : new Date();
+
+                periodEnd = new Date(periodStart.getTime());
+
+                if (billingCycle === 'monthly') {
+                    periodEnd.setMonth(periodEnd.getMonth() + 1);
+                } else if (billingCycle === 'yearly') {
+                    periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+                } else {
+                    periodEnd.setMonth(periodEnd.getMonth() + 1);
+                }
+            }
+
+            return { periodStart, periodEnd };
+
+        } catch (error) {
+            console.error('❌ Error calculating billing period dates:', error);
+
+            const now = new Date();
+            const oneMonthLater = new Date(now.getTime());
+            oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+
+            console.log(`🔧 FALLBACK: ${now.toLocaleDateString()} to ${oneMonthLater.toLocaleDateString()}`);
+
+            return {
+                periodStart: now,
+                periodEnd: oneMonthLater
+            };
+        }
+    }
+
+    private updateDatabaseAfterCheckout = async (
         userId: string,
         stripeSubscriptionId: string,
         stripeCustomerId: string,
         stripePriceId?: string
-    ) {
+    ) => {
         if (!stripePriceId) return;
 
         try {
             const planDetails = PlanValidator.validatePriceId(stripePriceId);
             if (!planDetails) return;
 
-            const stripeSubscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+            // ✅ Get accurate billing period using PlanValidator
+            const { periodStart, periodEnd } = await this.getBillingPeriodDates(stripeSubscriptionId, stripePriceId);
 
-            await prismaClient.subscriptions.updateMany({
-                where: { userId, status: PaymentStatus.ACTIVE },
-                data: { status: PaymentStatus.CANCELED, updatedAt: new Date() }
-            });
+            await prismaClient.$transaction(async (tx) => {
+                const existingSubscription = await tx.subscriptions.findUnique({
+                    where: { stripeSubscriptionId }
+                });
 
-            await prismaClient.subscriptions.create({
-                data: {
-                    userId,
-                    stripeSubscriptionId,
-                    stripePriceId,
-                    planType: planDetails.planConfig.dbPlanType,
-                    status: PaymentStatus.ACTIVE,
-                    currentPeriodEnd: new Date(stripeSubscription.trial_end! * 1000)
+                if (existingSubscription) {
+                    console.log(`Subscription ${stripeSubscriptionId} already exists, skipping creation`);
+                    return;
                 }
+
+                const existingSubs = await tx.subscriptions.findMany({
+                    where: { userId, status: PaymentStatus.ACTIVE }
+                });
+
+                console.log(`Found ${existingSubs.length} existing active subscriptions to cancel`);
+
+                if (existingSubs.length > 0) {
+                    await tx.subscriptions.updateMany({
+                        where: { userId, status: PaymentStatus.ACTIVE },
+                        data: { status: PaymentStatus.CANCELLED, updatedAt: new Date() }
+                    });
+                }
+
+                // ✅ Use calculated billing period dates
+                await tx.subscriptions.create({
+                    data: {
+                        userId,
+                        stripeSubscriptionId,
+                        stripePriceId,
+                        planType: planDetails.planConfig.dbPlanType,
+                        status: PaymentStatus.ACTIVE,
+                        currentPeriodStart: periodStart,
+                        currentPeriodEnd: periodEnd,
+                        cancelAtPeriodEnd: false,
+                        expiresAt: null
+                    }
+                });
+
+                console.log(`Created subscription: ${periodStart.toLocaleDateString()} to ${periodEnd.toLocaleDateString()}`);
             });
 
             const maxDesigns = planDetails.planConfig.maxDesigns === -1 ? 999999 : planDetails.planConfig.maxDesigns;
@@ -57,12 +165,10 @@ export default class StripeController {
             console.log(`Database updated after checkout for user ${userId}`);
         } catch (error) {
             console.error('Error updating database after checkout:', error);
+            throw error;
         }
     }
 
-    /**
-     * Create initial checkout session for new subscriptions
-     */
     async createCheckoutSession(req: Request, res: Response) {
         const { priceId } = req.body;
 
@@ -101,9 +207,6 @@ export default class StripeController {
         }
     }
 
-    /**
-     * Retrieve checkout session details
-     */
     retrieveSession = async (req: Request, res: Response) => {
         try {
             const sessionId = req.query.session_id as string;
@@ -133,7 +236,8 @@ export default class StripeController {
             if (userId && session.subscription && session.mode === 'subscription') {
                 await this.updateDatabaseAfterCheckout(
                     userId,
-                    session.subscription as string,
+                    // @ts-ignore
+                    session.subscription.id as string,
                     session.customer as string,
                     session.line_items?.data[0]?.price?.id
                 );
@@ -155,9 +259,6 @@ export default class StripeController {
         }
     }
 
-    /**
-     * Handle successful payment completion
-     */
     async success(req: Request, res: Response) {
         try {
             res.status(200).json({
@@ -169,9 +270,6 @@ export default class StripeController {
         }
     }
 
-    /**
-     * Handle cancelled payment
-     */
     async cancel(req: Request, res: Response) {
         try {
             res.json({
@@ -229,12 +327,11 @@ export default class StripeController {
                 });
             }
 
-
             const { planConfig, billingCycle } = planDetails;
             const currentSubscription = user.subscriptions[0];
             const currentPlanType = currentSubscription?.planType || PlanType.FREE;
 
-            if(currentPlanType === planConfig.dbPlanType) {
+            if(currentSubscription?.stripePriceId === targetPriceId) {
                 return res.status(400).json({
                     status: false,
                     message: 'You are already on this plan'
@@ -256,7 +353,7 @@ export default class StripeController {
                         status: PaymentStatus.ACTIVE
                     },
                     data: {
-                        status: PaymentStatus.CANCELED,
+                        status: PaymentStatus.CANCELLED,
                         updatedAt: new Date()
                     }
                 });
@@ -305,7 +402,7 @@ export default class StripeController {
                         status: PaymentStatus.ACTIVE
                     },
                     data: {
-                        status: PaymentStatus.CANCELED,
+                        status: PaymentStatus.CANCELLED,
                         updatedAt: new Date()
                     }
                 });
@@ -319,7 +416,7 @@ export default class StripeController {
                     quantity: 1,
                 }],
                 success_url: `${publicUrl}/success?session_id={CHECKOUT_SESSION_ID}&plan_change=true`,
-                cancel_url: `${publicUrl}/pricing?canceled=true`,
+                cancel_url: `${publicUrl}/pricing?cancelled=true`,
                 customer_email: user.email,
                 metadata: {
                     userId: userId as string,
@@ -454,40 +551,71 @@ export default class StripeController {
             if (!isValidPriceId) {
                 return res.status(400).json({
                     status: false,
-                    error: 'Invalid price id or price id is invalid'
-                })
+                    error: 'Invalid price id'
+                });
             }
 
             const userId = req.user?.userId;
-
             const user = await prismaClient.user.findUnique({
                 where: { id: userId },
                 include: {
                     subscriptions: {
-                        where: {
-                            status: PaymentStatus.ACTIVE,
-                        },
+                        where: { status: PaymentStatus.ACTIVE },
                         take: 1
                     }
                 }
             });
 
-            if(!user) {
+            if(!user || !user.subscriptions.length) {
                 return res.status(400).json({
                     status: false,
-                    error: "User not found"
-                })
+                    error: "User not found or no active subscription"
+                });
             }
 
-            const {planConfig, billingCycle} = isValidPriceId;
-            const subscriptionId = user.subscriptions[0].stripeSubscriptionId;
+            const currentSubscription = user.subscriptions[0];
+            const subscriptionId = currentSubscription.stripeSubscriptionId;
 
+            // ✅ Get current billing period end using PlanValidator
+            const { periodEnd } = await this.getBillingPeriodDates(
+                subscriptionId!,
+                currentSubscription.stripePriceId!
+            );
+
+            // Cancel subscription in Stripe
             await stripe.subscriptions.update(subscriptionId!, {
                 cancel_at_period_end: true
-            })
+            });
+
+            // ✅ Use the calculated period end date
+            await prismaClient.subscriptions.update({
+                where: { stripeSubscriptionId: subscriptionId! },
+                data: {
+                    cancelAtPeriodEnd: true,
+                    expiresAt: periodEnd, // ✅ This will show the correct billing period end
+                    status: PaymentStatus.ACTIVE,
+                    updatedAt: new Date()
+                }
+            });
+
+            console.log(`Plan cancelled for user ${userId}, expires: ${periodEnd.toLocaleDateString()}`);
+
+            return res.status(200).json({
+                status: true,
+                message: 'Your plan will be canceled at the end of the billing period',
+                data: {
+                    cancelAtPeriodEnd: true,
+                    expiresAt: periodEnd,
+                    message: `You'll retain access until ${periodEnd.toLocaleDateString()}`
+                }
+            });
 
         } catch (e) {
-            ApplicationError(e);
+            console.error('Cancel plan error:', e);
+            return res.status(500).json({
+                status: false,
+                error: 'Failed to cancel subscription'
+            });
         }
     }
 
@@ -503,9 +631,6 @@ export default class StripeController {
                 });
             }
 
-            console.log(`Completing checkout for user ${userId}, subscription ${stripeSubscriptionId}`);
-
-            // **Validate price ID**
             const planDetails = PlanValidator.validatePriceId(stripePriceId);
             if (!planDetails) {
                 return res.status(400).json({
@@ -514,63 +639,50 @@ export default class StripeController {
                 });
             }
 
-            // **Fix: Ensure stripeSubscriptionId is a string**
             const subscriptionId = typeof stripeSubscriptionId === 'string'
                 ? stripeSubscriptionId
                 : stripeSubscriptionId.id || stripeSubscriptionId;
 
-            console.log(`Retrieving subscription with ID: ${subscriptionId}`);
+            // ✅ Get accurate billing period using PlanValidator
+            const { periodStart, periodEnd } = await this.getBillingPeriodDates(subscriptionId, stripePriceId);
 
-            // **Get subscription details from Stripe with correct ID**
-            const stripeSubscription = await stripe.subscriptions.retrieve(subscriptionId);
-
-            if (stripeSubscription.status !== 'active') {
-                return res.status(400).json({
-                    status: false,
-                    error: 'Subscription is not active'
+            await prismaClient.$transaction(async (tx) => {
+                const existingSubscription = await tx.subscriptions.findUnique({
+                    where: { stripeSubscriptionId: subscriptionId }
                 });
-            }
 
-            // **Fix: Cancel existing active subscriptions FIRST to avoid unique constraint violation**
-            const existingSubscriptions = await prismaClient.subscriptions.findMany({
-                where: {
-                    userId,
-                    status: PaymentStatus.ACTIVE
+                if (existingSubscription) {
+                    console.log(`Subscription ${subscriptionId} already exists, skipping creation`);
+                    return;
                 }
-            });
 
-            console.log(`Found ${existingSubscriptions.length} existing active subscriptions to cancel`);
+                const existingSubs = await tx.subscriptions.findMany({
+                    where: { userId, status: PaymentStatus.ACTIVE }
+                });
 
-            // Cancel all existing active subscriptions
-            if (existingSubscriptions.length > 0) {
-                await prismaClient.subscriptions.updateMany({
-                    where: {
-                        userId,
-                        status: PaymentStatus.ACTIVE
-                    },
+                if (existingSubs.length > 0) {
+                    await tx.subscriptions.updateMany({
+                        where: { userId, status: PaymentStatus.ACTIVE },
+                        data: { status: PaymentStatus.CANCELLED, updatedAt: new Date() }
+                    });
+                }
+
+                // ✅ Use calculated billing period dates
+                await tx.subscriptions.create({
                     data: {
-                        status: PaymentStatus.CANCELED,
-                        updatedAt: new Date()
+                        userId,
+                        stripeSubscriptionId: subscriptionId,
+                        stripePriceId,
+                        planType: planDetails.planConfig.dbPlanType,
+                        status: PaymentStatus.ACTIVE,
+                        currentPeriodStart: periodStart,
+                        currentPeriodEnd: periodEnd,
+                        cancelAtPeriodEnd: false,
+                        expiresAt: null
                     }
                 });
-                console.log(`Cancelled ${existingSubscriptions.length} existing subscriptions`);
-            }
-
-            // **Create new subscription record AFTER cancelling existing ones**
-            const newSubscription = await prismaClient.subscriptions.create({
-                data: {
-                    userId,
-                    stripeSubscriptionId: subscriptionId,
-                    stripePriceId,
-                    planType: planDetails.planConfig.dbPlanType,
-                    status: PaymentStatus.ACTIVE,
-                    currentPeriodEnd: new Date(stripeSubscription.trial_end! * 1000)
-                }
             });
 
-            console.log(`Created new subscription record: ${newSubscription.id}`);
-
-            // **Update user's limits and customer ID**
             const maxDesigns = planDetails.planConfig.maxDesigns === -1 ? 999999 : planDetails.planConfig.maxDesigns;
             await prismaClient.user.update({
                 where: { id: userId },
@@ -580,13 +692,10 @@ export default class StripeController {
                 }
             });
 
-            console.log(`Successfully completed checkout for user ${userId}`);
-
             return res.json({
                 status: true,
                 message: 'Checkout completed successfully',
                 data: {
-                    subscriptionId: newSubscription.id,
                     planType: planDetails.planConfig.dbPlanType,
                     maxDesigns,
                     billingCycle: planDetails.billingCycle
@@ -595,10 +704,94 @@ export default class StripeController {
 
         } catch (error) {
             console.error('Error completing checkout:', error);
-            ApplicationError(error);
             return res.status(500).json({
                 status: false,
                 error: 'Failed to complete checkout'
+            });
+        }
+    }
+
+    reactivatePlan = async (req: Request, res: Response) => {
+        try {
+            const {priceId} = req.body;
+            const userId = req.user?.userId;
+
+            if (!priceId || !userId) {
+                return res.status(400).json({
+                    status: false,
+                    error: 'Missing required parameters'
+                });
+            }
+
+            const user = await prismaClient.user.findUnique({
+                where: { id: userId },
+                include: {
+                    subscriptions: {
+                        where: {
+                            status: PaymentStatus.ACTIVE,
+                            cancelAtPeriodEnd: true,
+                        },
+                        take: 1
+                    }
+                }
+            })
+
+            if(!user || !user.subscriptions.length) {
+                return res.status(400).json({
+                    status: false,
+                    error: "No subscription found to reactivate"
+                });
+            }
+
+            const subscription = user.subscriptions[0];
+
+            const subscriptionId = subscription.stripeSubscriptionId
+
+            if(!subscriptionId) {
+                return res.status(400).json({
+                    status: false,
+                    error: "Cannot reactivate free plan"
+                });
+            }
+
+            const updatedSubscription = await stripe.subscriptions.update(subscriptionId, {
+                cancel_at_period_end: false
+            });
+
+            const {periodStart, periodEnd} = await this.getBillingPeriodDates(subscriptionId, subscription.stripePriceId!);
+
+            await prismaClient.subscriptions.update({
+                where: {
+                    stripeSubscriptionId: subscriptionId
+                },
+                data: {
+                    status: PaymentStatus.ACTIVE,
+                    expiresAt: null,
+                    cancelAtPeriodEnd: false,
+                    currentPeriodStart: periodStart,
+                    currentPeriodEnd: periodEnd,
+                    updatedAt: new Date()
+                }
+            })
+
+            console.log(`Subscription reactivated for user ${userId}, subscription ${subscriptionId}`);
+
+            return res.status(200).json({
+                status: true,
+                message: 'Your subscription has been reactivated successfully',
+                data: {
+                    subscriptionStatus: PaymentStatus.ACTIVE,
+                    cancelAtPeriodEnd: false,
+                    currentPeriodEnd: periodEnd,
+                    message: `Your ${subscription.planType} plan will continue until ${periodEnd.toLocaleDateString()}`
+                }
+            });
+        } catch (e) {
+            console.error('Error reactivating plan:', e);
+            ApplicationError(e);
+            return res.status(500).json({
+                status: false,
+                error: 'Failed to reactivate plan'
             });
         }
     }

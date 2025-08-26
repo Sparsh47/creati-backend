@@ -1,7 +1,7 @@
 import {Request, Response} from "express";
 import {ApplicationError} from "../lib/utils";
 import {prismaClient} from "../services/prisma.service";
-import {PLANS} from "../lib/constants";
+import {PaymentStatus, PlanType} from "../generated/prisma";
 
 export default class ProfileController {
     private static _instance: ProfileController;
@@ -43,6 +43,8 @@ export default class ProfileController {
                 return;
             }
 
+            console.log("HERE AGAIN")
+
             await prismaClient.user.update({
                 where: {
                     id: userId
@@ -51,6 +53,8 @@ export default class ProfileController {
                     name: name
                 }
             });
+
+            console.log("HERE")
 
             res.status(200).json({
                 status: true,
@@ -96,13 +100,22 @@ export default class ProfileController {
         try {
             const userId = req.user?.userId;
 
-            console.log(userId);
-
             const user = await prismaClient.user.findUnique({
                 where: {
                     id: userId
                 },
                 include: {
+                    subscriptions: {
+                        orderBy: {
+                            updatedAt: "desc",
+                        },
+                        where: {
+                            planType: {
+                                not: PlanType.FREE
+                            }
+                        },
+                        take: 10
+                    },
                     designs: true
                 }
             });
@@ -115,11 +128,7 @@ export default class ProfileController {
                 return;
             }
 
-            console.log(user);
-
             const currentPlan = await this.getUserActiveSubscription(userId!);
-
-            console.log(currentPlan);
 
             res.status(200).json({
                 status: true,
@@ -127,6 +136,7 @@ export default class ProfileController {
                     name: user.name,
                     email: user.email,
                     designs: user.designs,
+                    subscriptions: user.subscriptions,
                     maxDesigns: user.maxDesigns,
                     plan: currentPlan
                 }
