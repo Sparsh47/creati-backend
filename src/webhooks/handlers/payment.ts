@@ -1,5 +1,5 @@
 import { prismaClient } from '../../services/prisma.service';
-import { PaymentStatus } from '../../generated/prisma';
+import { PaymentStatus } from '@prisma/client';
 
 export const handlePaymentSucceeded = async (invoice: any) => {
     console.log('Processing payment succeeded:', invoice.id);

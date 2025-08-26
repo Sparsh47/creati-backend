@@ -4,7 +4,7 @@ import Stripe from "stripe";
 import { stripe } from "../services/stripe.service";
 import { prismaClient } from "../services/prisma.service";
 import { PlanValidator } from "../validations/plan.validations";
-import { PaymentStatus, PlanType } from '../generated/prisma';
+import { PaymentStatus, PlanType } from '@prisma/client';
 
 export default class StripeController {
     private static _instance: StripeController;

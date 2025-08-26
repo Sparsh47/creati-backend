@@ -5,7 +5,7 @@ import neo4jDriver from "../services/neo4j.service";
 import cloudinary from "../services/cloudinary.service";
 import {UploadApiResponse, UploadApiErrorResponse} from "cloudinary";
 import {PlanValidator} from "../validations/plan.validations";
-import {Type} from "../generated/prisma";
+import {Type} from "@prisma/client";
 
 interface CloudinaryResult {
     public_id: string;

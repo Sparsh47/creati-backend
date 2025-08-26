@@ -1,7 +1,6 @@
 import {prismaClient} from "../../services/prisma.service";
-import {PaymentStatus, PlanType} from "../../generated/prisma";
+import {PaymentStatus, PlanType} from "@prisma/client";
 import Stripe from "stripe";
-import {stripe} from "../../services/stripe.service"
 import {PlanValidator} from "../../validations/plan.validations";
 
 export const handleSubscriptionCreated = async (subscription: Stripe.Subscription) => {

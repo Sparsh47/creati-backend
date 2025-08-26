@@ -1,7 +1,7 @@
 import {Request, Response} from "express";
 import {ApplicationError} from "../lib/utils";
 import {prismaClient} from "../services/prisma.service";
-import {PaymentStatus, PlanType} from "../generated/prisma";
+import {PaymentStatus, PlanType} from "@prisma/client";
 
 export default class ProfileController {
     private static _instance: ProfileController;

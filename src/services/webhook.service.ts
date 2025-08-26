@@ -1,5 +1,5 @@
 import {prismaClient} from "./prisma.service";
-import {WebhookStatus} from "../generated/prisma";
+import {WebhookStatus} from "@prisma/client";
 
 export default class WebhookService {
     private static _instance: WebhookService

@@ -1,4 +1,4 @@
-import { PlanType } from '../generated/prisma';
+import { PlanType } from '@prisma/client';
 
 export interface PlanConfig {
     frontendId: string;

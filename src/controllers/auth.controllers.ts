@@ -9,7 +9,7 @@ import {
 } from "../services/redis.service";
 import { prismaClient } from "../services/prisma.service";
 import { verifyGoogleToken } from "../services/google.service";
-import {PaymentStatus, PlanType} from "../generated/prisma";
+import {PaymentStatus, PlanType} from "@prisma/client";
 
 export default class AuthController {
     private static _instance: AuthController;
