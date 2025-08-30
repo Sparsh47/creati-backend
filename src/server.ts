@@ -10,7 +10,7 @@ import {paymentRouter} from "./routes/stripe.routes";
 import {webhookRouter} from "./webhooks";
 
 dotenv.config();
-const PORT = process.env.PORT || 8000;
+const PORT = parseInt(process.env.PORT || "8000", 10);
 const app = express();
 
 app.use("/api/v1/webhooks", webhookRouter);
@@ -36,8 +36,6 @@ app.use("/api/v1/payment", authMiddleware, paymentRouter);
 // global error handler
 app.use(globalErrorHandler);
 
-if (typeof PORT === "number") {
-    app.listen(PORT, '0.0.0.0', () => {
-        console.log(`Server is running on port ${PORT}`);
-    });
-}
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server is running on port ${PORT}`);
+});
