@@ -1,0 +1,12 @@
+name: Neo4j Keepalive
+on:
+  schedule:
+    - cron: '0 */48 * * *'  # Every 48 hours
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Keep Neo4j Active
+        run: |
+          curl -X POST "${{ secrets.BACKEND_URL }}/keepalive/trigger"
