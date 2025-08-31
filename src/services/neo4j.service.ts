@@ -1,4 +1,3 @@
-// neo4j-driver.ts (or wherever your driver is)
 import neo4j, {Driver} from 'neo4j-driver';
 
 const neo4jDriver: Driver = neo4j.driver(

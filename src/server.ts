@@ -8,7 +8,8 @@ import {designsRouter} from "./routes/designs.routes";
 import {profileRouter} from "./routes/profile.routes";
 import {paymentRouter} from "./routes/stripe.routes";
 import {webhookRouter} from "./webhooks";
-import neo4jDriver, { testConnection } from "./services/neo4j.service"
+import neo4jDriver, { testConnection } from "./services/neo4j.service";
+import {neo4jKeepalive} from "./scripts/keepalive.script";
 
 dotenv.config();
 
@@ -101,6 +102,36 @@ app.get("/health/database", async (req, res) => {
     }
 });
 
+// Add keepalive status endpoint
+app.get("/keepalive/status", (req, res) => {
+    const status = neo4jKeepalive.getStatus();
+    res.status(200).json({
+        service: "neo4j-keepalive",
+        ...status,
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Add manual keepalive trigger endpoint
+app.post("/keepalive/trigger", async (req, res) => {
+    try {
+        console.log('🔄 Manual keepalive triggered');
+        const success = await neo4jKeepalive.performKeepalive();
+
+        res.status(200).json({
+            status: success ? "success" : "failed",
+            message: success ? "Keepalive executed successfully" : "Keepalive failed",
+            timestamp: new Date().toISOString()
+        });
+    } catch (error: any) {
+        res.status(500).json({
+            status: "error",
+            message: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/designs", authMiddleware, designsRouter);
 app.use("/api/v1/profile", authMiddleware, profileRouter);
@@ -110,7 +141,7 @@ app.use(globalErrorHandler);
 
 console.log('🚀 Starting server...');
 
-// Add async server startup function
+// Updated async server startup function
 async function startServer() {
     try {
         // Validate environment variables
@@ -126,8 +157,12 @@ async function startServer() {
         if (!isConnected) {
             console.error('❌ Failed to connect to Neo4j database');
             console.error('⚠️  Server will continue but database operations may fail');
-            // You can choose to exit here if database is critical:
-            // process.exit(1);
+        }
+
+        // Start keepalive service after successful connection
+        if (isConnected) {
+            console.log('🔄 Starting Neo4j keepalive service...');
+            neo4jKeepalive.start();
         }
 
         // Start the server
@@ -135,6 +170,10 @@ async function startServer() {
             console.log('✅ Server successfully started!');
             console.log(`🌐 Server running on http://0.0.0.0:${PORT}`);
             console.log(`🔗 Server accessible at port ${PORT}`);
+
+            if (isConnected) {
+                console.log('🤖 Neo4j keepalive service is active');
+            }
         });
 
         server.on('error', (error: any) => {
@@ -145,9 +184,13 @@ async function startServer() {
             process.exit(1);
         });
 
-        // Graceful shutdown handlers
+        // Updated graceful shutdown handlers
         const gracefulShutdown = async (signal: string) => {
             console.log(`🛑 ${signal} received, shutting down gracefully`);
+
+            // Stop keepalive service first
+            console.log('🔄 Stopping keepalive service...');
+            neo4jKeepalive.stop();
 
             server.close(async () => {
                 console.log('✅ Server closed');
