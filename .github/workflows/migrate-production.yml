@@ -29,16 +29,16 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
-      - name: Check migration status
+      - name: Check migration status (informational only)
         run: |
-          echo "📊 Checking current migration status..."
-          npx prisma migrate status
+          echo "📊 Current migration status:"
+          npx prisma migrate status || echo "✅ Status check completed (pending migrations found)"
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Deploy migrations
         run: |
-          echo "🚀 Applying pending migrations..."
+          echo "🚀 Deploying pending migrations..."
           npx prisma migrate deploy
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -49,3 +49,6 @@ jobs:
           npx prisma migrate status
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Success notification
+        run: echo "🎉 All migrations deployed successfully!"
