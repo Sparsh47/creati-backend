@@ -8,12 +8,28 @@ import {designsRouter} from "./routes/designs.routes";
 import {profileRouter} from "./routes/profile.routes";
 import {paymentRouter} from "./routes/stripe.routes";
 import {webhookRouter} from "./webhooks";
+import neo4jDriver, { testConnection } from "./services/neo4j.service"
 
 dotenv.config();
 
 console.log('=== SERVER STARTUP ===');
 console.log('NODE_ENV:', process.env.NODE_ENV);
 console.log('PORT from env:', process.env.PORT);
+
+// Validate Neo4j environment variables
+function validateNeo4jEnvironment() {
+    const required = ['NEO4J_URI', 'NEO4J_USERNAME', 'NEO4J_PASSWORD'];
+    const missing = required.filter(env => !process.env[env]);
+
+    if (missing.length > 0) {
+        console.error('❌ Missing required Neo4j environment variables:', missing);
+        return false;
+    }
+
+    console.log('✅ Neo4j environment variables validated');
+    console.log('🔗 Neo4j URI:', process.env.NEO4J_URI?.replace(/\/\/.*@/, '//***@'));
+    return true;
+}
 
 const PORT = parseInt(process.env.PORT || "8000", 10);
 console.log('Final PORT:', PORT);
@@ -55,6 +71,36 @@ app.get("/health", (req, res) => {
     });
 });
 
+// Add Neo4j database health check endpoint
+app.get("/health/database", async (req, res) => {
+    try {
+        const isConnected = await testConnection();
+
+        if (isConnected) {
+            res.status(200).json({
+                status: "healthy",
+                database: "neo4j",
+                timestamp: new Date().toISOString(),
+                uptime: process.uptime()
+            });
+        } else {
+            res.status(503).json({
+                status: "unhealthy",
+                database: "neo4j",
+                error: "Connection failed",
+                timestamp: new Date().toISOString()
+            });
+        }
+    } catch (error: any) {
+        res.status(503).json({
+            status: "error",
+            database: "neo4j",
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/designs", authMiddleware, designsRouter);
 app.use("/api/v1/profile", authMiddleware, profileRouter);
@@ -64,34 +110,73 @@ app.use(globalErrorHandler);
 
 console.log('🚀 Starting server...');
 
-const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log('✅ Server successfully started!');
-    console.log(`🌐 Server running on http://0.0.0.0:${PORT}`);
-    console.log(`🔗 Server accessible at port ${PORT}`);
-});
+// Add async server startup function
+async function startServer() {
+    try {
+        // Validate environment variables
+        if (!validateNeo4jEnvironment()) {
+            console.error('❌ Environment validation failed. Exiting...');
+            process.exit(1);
+        }
 
-server.on('error', (error: any) => {
-    console.error('❌ Server error:', error);
-    if (error.code === 'EADDRINUSE') {
-        console.error(`Port ${PORT} is already in use`);
+        // Test Neo4j connection
+        console.log('🔄 Testing Neo4j database connection...');
+        const isConnected = await testConnection();
+
+        if (!isConnected) {
+            console.error('❌ Failed to connect to Neo4j database');
+            console.error('⚠️  Server will continue but database operations may fail');
+            // You can choose to exit here if database is critical:
+            // process.exit(1);
+        }
+
+        // Start the server
+        const server = app.listen(PORT, '0.0.0.0', () => {
+            console.log('✅ Server successfully started!');
+            console.log(`🌐 Server running on http://0.0.0.0:${PORT}`);
+            console.log(`🔗 Server accessible at port ${PORT}`);
+        });
+
+        server.on('error', (error: any) => {
+            console.error('❌ Server error:', error);
+            if (error.code === 'EADDRINUSE') {
+                console.error(`Port ${PORT} is already in use`);
+            }
+            process.exit(1);
+        });
+
+        // Graceful shutdown handlers
+        const gracefulShutdown = async (signal: string) => {
+            console.log(`🛑 ${signal} received, shutting down gracefully`);
+
+            server.close(async () => {
+                console.log('✅ Server closed');
+
+                try {
+                    console.log('🔄 Closing Neo4j driver...');
+                    await neo4jDriver.close();
+                    console.log('✅ Neo4j driver closed');
+                } catch (error) {
+                    console.error('❌ Error closing Neo4j driver:', error);
+                }
+
+                process.exit(0);
+            });
+        };
+
+        process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+        process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+    } catch (error) {
+        console.error('❌ Failed to start server:', error);
+        process.exit(1);
     }
+}
+
+// Start the server
+startServer().catch((error) => {
+    console.error('❌ Server startup failed:', error);
     process.exit(1);
-});
-
-process.on('SIGTERM', () => {
-    console.log('🛑 SIGTERM received, shutting down gracefully');
-    server.close(() => {
-        console.log('✅ Server closed');
-        process.exit(0);
-    });
-});
-
-process.on('SIGINT', () => {
-    console.log('🛑 SIGINT received, shutting down gracefully');
-    server.close(() => {
-        console.log('✅ Server closed');
-        process.exit(0);
-    });
 });
 
 console.log('📝 Server setup complete');
