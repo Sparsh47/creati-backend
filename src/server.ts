@@ -11,7 +11,6 @@ import {webhookRouter} from "./webhooks";
 
 dotenv.config();
 
-// Add comprehensive logging
 console.log('=== SERVER STARTUP ===');
 console.log('NODE_ENV:', process.env.NODE_ENV);
 console.log('PORT from env:', process.env.PORT);
@@ -21,7 +20,6 @@ console.log('Final PORT:', PORT);
 
 const app = express();
 
-// Add error handlers early
 process.on('uncaughtException', (error) => {
     console.error('❌ UNCAUGHT EXCEPTION:', error);
     process.exit(1);
@@ -32,23 +30,13 @@ process.on('unhandledRejection', (reason, promise) => {
     process.exit(1);
 });
 
-// Middleware setup
 app.use("/api/v1/webhooks", webhookRouter);
 app.use(express.json());
 
-// Fix CORS configuration
-const allowedOrigins = [
-    "http://localhost:3000",
-    process.env.FRONTEND_BASE_URL!
-].filter(Boolean);
-
-console.log('Allowed CORS origins:', allowedOrigins);
-
 app.use(cors({
-    origin: allowedOrigins.length > 0 ? allowedOrigins : true
+    origin: "https://creati.vercel.app"
 }));
 
-// Health check endpoint
 app.get("/", (req, res) => {
     console.log('✅ Health check endpoint hit');
     res.status(200).json({
@@ -67,16 +55,13 @@ app.get("/health", (req, res) => {
     });
 });
 
-// Routes
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/designs", authMiddleware, designsRouter);
 app.use("/api/v1/profile", authMiddleware, profileRouter);
 app.use("/api/v1/payment", authMiddleware, paymentRouter);
 
-// Global error handler
 app.use(globalErrorHandler);
 
-// Start server with proper error handling
 console.log('🚀 Starting server...');
 
 const server = app.listen(PORT, '0.0.0.0', () => {
@@ -93,7 +78,6 @@ server.on('error', (error: any) => {
     process.exit(1);
 });
 
-// Graceful shutdown
 process.on('SIGTERM', () => {
     console.log('🛑 SIGTERM received, shutting down gracefully');
     server.close(() => {
