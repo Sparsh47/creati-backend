@@ -1,0 +1,82 @@
+name: Production Database Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type MIGRATE to confirm'
+        required: true
+      dry_run:
+        description: 'Dry run (check status only)'
+        type: boolean
+        default: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'MIGRATE'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Test database connection
+        run: |
+          echo "🔍 Testing database connection..."
+          timeout 30 npx prisma db execute --stdin <<< "SELECT 1;" || {
+            echo "❌ Database connection failed"
+            exit 1
+          }
+          echo "✅ Database connection successful"
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Check migration status
+        run: |
+          echo "📊 Current migration status:"
+          npx prisma migrate status
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Run migrations (dry run)
+        if: github.event.inputs.dry_run == 'true'
+        run: |
+          echo "🧪 This is a dry run - no actual migrations will be applied"
+          npx prisma migrate status
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Run migrations
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          echo "🚀 Running production migrations..."
+          timeout 300 npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Verify final status
+        run: |
+          echo "✅ Final migration status:"
+          npx prisma migrate status
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Success notification
+        if: success()
+        run: echo "🎉 Migration completed successfully!"
+
+      - name: Failure notification
+        if: failure()
+        run: echo "❌ Migration failed - check logs above for details"
