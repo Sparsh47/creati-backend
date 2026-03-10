@@ -1,3 +1,3 @@
-api-create.sparshy.dev {
+api-creati.sparshy.dev {
     reverse_proxy backend:8000
 }
