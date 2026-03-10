@@ -12,11 +12,28 @@ services:
       ports:
          - "8000:8000"
       healthcheck:
-         test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+         test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
          interval: 30s
          timeout: 10s
          retries: 3
       logging:
-        options:
-          max-size: "10m"
-          max-file: "3"
+         options:
+            max-size: "10m"
+            max-file: "3"
+   caddy:
+      image: caddy:latest
+      container_name: creati-caddy
+      restart: unless-stopped
+      ports:
+         - "80:80"
+         - "443:443"
+      volumes:
+         - ./Caddyfile:/etc/caddy/Caddyfile
+         - caddy_data:/data
+         - caddy_config:/config
+      depends_on:
+         - backend
+
+volumes:
+   caddy_data:
+   caddy_config:
