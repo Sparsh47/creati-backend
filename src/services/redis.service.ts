@@ -4,6 +4,7 @@ import { ApplicationError } from "../lib/utils";
 
 export const redisClient = createClient({
     url: process.env.REDIS_URL!,
+    pingInterval: 1000 * 60 * 4, // 4 minutes
 });
 
 redisClient.on("error", (err) => {
